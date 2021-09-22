@@ -22,6 +22,19 @@ class Base:
         self._lock = threading.Lock()
 
     def _describe(self, out):
+        for key, defn in self.yaq_client._protocol.get("fields", {}).items():
+            if key == "origin":
+                continue
+            if not defn["fields"]["dynamic"]:
+                continue
+            out[f"{self.name}_{key}"] = self._field_metadata
+            if defn["fields"]["type"] in ["int", "float", "double"]:
+                out[f"{self.name}_{key}"]["dtype"] = "number"
+            elif defn["fields"]["type"] == "string":
+                out[f"{self.name}_{key}"]["dtype"] = "string"
+            else:
+                out[f"{self.name}_{key}"]["dtype"] = "array"
+                # TODO shape?
         return out
 
     def describe(self) -> OrderedDict:
@@ -30,7 +43,22 @@ class Base:
         return out
 
     def describe_configuration(self) -> OrderedDict:
-        return OrderedDict()
+        out: OrderedDict = OrderedDict()
+        for key, defn in self.yaq_client._protocol.get("fields", {}).items():
+            if key == "origin":
+                continue
+            if defn["fields"]["dynamic"]:
+                continue
+            out[f"{self.name}_{key}"] = self._field_metadata
+            if defn["fields"]["type"] in ["int", "float", "double"]:
+                out[f"{self.name}_{key}"]["dtype"] = "number"
+            elif defn["fields"]["type"] == "string":
+                out[f"{self.name}_{key}"]["dtype"] = "string"
+            else:
+                out[f"{self.name}_{key}"]["dtype"] = "array"
+                # TODO shape?
+
+        return out
 
     @property
     def _field_metadata(self) -> OrderedDict:
@@ -49,6 +77,16 @@ class Base:
         return out
 
     def _read(self, out, ts) -> OrderedDict:
+        for key, defn in self.yaq_client._protocol.get("fields", {}).items():
+            if key == "origin":
+                continue
+            if not defn["fields"]["dynamic"]:
+                continue
+            getter = defn["fields"]["getter"]
+            out[f"{self.name}_{key}"] = {
+                "value": getattr(self.yaq_client, getter)(),
+                "timestamp": ts,
+            }
         return out
 
     def read(self) -> OrderedDict:
@@ -59,7 +97,19 @@ class Base:
         return out
 
     def read_configuration(self) -> OrderedDict:
-        return OrderedDict()
+        out = OrderedDict()
+        ts = time.time()
+        for key, defn in self.yaq_client._protocol.get("fields", {}).items():
+            if key == "origin":
+                continue
+            if defn["fields"]["dynamic"]:
+                continue
+            getter = defn["fields"]["getter"]
+            out[f"{self.name}_{key}"] = {
+                "value": getattr(self.yaq_client, getter)(),
+                "timestamp": ts,
+            }
+        return out
 
     def trigger(self) -> Status:
         # should be overloaded for those devices that need a trigger
